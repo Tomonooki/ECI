@@ -1,5 +1,5 @@
-streamlit
-requests
-yfinance
-plotly
-pandas
+streamlit==1.17.0
+requests==2.28.1
+yfinance==0.2.3
+pandas==1.5.3
+plotly==5.11.0
