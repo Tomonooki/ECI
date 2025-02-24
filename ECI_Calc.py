@@ -30,24 +30,37 @@ def login():
 
 def fetch_btc_price():
     """
-    Fetches the current BTC price in USD (using USDT as a proxy) from Binance.
+    Fetches the current BTC price in USD. First tries Binance, then falls back to yfinance if Binance fails.
     """
-    url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+    # Try Binance first
     try:
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
         response = requests.get(url, timeout=5)
-        if response.status_code != 200:
-            st.error("Failed to fetch BTC price. Please check your internet connection.")
-            return None
-        data = response.json()
-        # Expected response: {"symbol": "BTCUSDT", "price": "xxxx.xx"}
-        current_price = float(data.get("price", 0))
-        if current_price == 0:
-            st.error("Received invalid BTC price from Binance.")
-            return None
-        return current_price
+        if response.status_code == 200:
+            data = response.json()
+            current_price = float(data.get("price", 0))
+            if current_price != 0:
+                return current_price
+            else:
+                st.warning("Binance returned an invalid BTC price. Trying yfinance...")
+        else:
+            st.warning(f"Binance API returned non-200 status: {response.status_code}. Trying yfinance...")
     except Exception as e:
-        st.error(f"Error fetching BTC price: {e}")
-        return None
+        st.warning(f"Binance API failed with error: {e}. Trying yfinance...")
+
+    # Fallback to yfinance
+    try:
+        btc = yf.Ticker("BTC-USD")
+        data = btc.history(period="1d")
+        if not data.empty:
+            current_price = data['Close'].iloc[-1]
+            return current_price
+        else:
+            st.error("yfinance returned empty data.")
+    except Exception as e:
+        st.error(f"Error fetching BTC price from yfinance: {e}")
+    
+    return None
 
 def calculate_annual_payment(loan_amount, annual_rate, years):
     """
