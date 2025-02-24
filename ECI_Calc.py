@@ -1,15 +1,18 @@
-# ECI_3_streamlit.py
+# ECI_Calc.py
 
 import streamlit as st
 import requests
+import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 
 # ----------------------------- #
 #          Login Module          #
 # ----------------------------- #
-
 def login():
+    """
+    Simple login function that checks for a fixed password.
+    """
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
 
@@ -19,6 +22,7 @@ def login():
         if st.button("Login"):
             if password_input == "Bitcoin99!":
                 st.session_state.logged_in = True
+                # Force a rerun of the script to load the main app
                 st.experimental_rerun()
             else:
                 st.error("Incorrect password!")
@@ -54,12 +58,13 @@ def fetch_btc_price():
         data = btc.history(period="1d")
         if not data.empty:
             current_price = data['Close'].iloc[-1]
-            return current_price
+            return float(current_price)
         else:
             st.error("yfinance returned empty data.")
     except Exception as e:
         st.error(f"Error fetching BTC price from yfinance: {e}")
-    
+
+    # If all else fails, return None
     return None
 
 def calculate_annual_payment(loan_amount, annual_rate, years):
@@ -71,7 +76,8 @@ def calculate_annual_payment(loan_amount, annual_rate, years):
 
 def generate_loan_schedule(loan_amount, annual_rate, annual_payment, years):
     """
-    Generates the loan schedule showing interest, principal repayment, and remaining balance each year.
+    Generates the loan schedule showing interest, principal repayment, 
+    and remaining balance each year.
     """
     schedule = []
     remaining_balance = loan_amount
@@ -132,7 +138,10 @@ def plot_ecis_profit(profit_percentage):
         template='plotly_white',
         height=400
     )
-    fig.update_traces(text=[f"{profit_percentage}%" if profit_percentage > 0 else f"{profit_percentage}%"], textposition='auto')
+    fig.update_traces(
+        text=[f"{profit_percentage}%" if profit_percentage > 0 else f"{profit_percentage}%"],
+        textposition='auto'
+    )
     return fig
 
 def plot_investors_net_benefit(years, net_benefit):
@@ -160,9 +169,10 @@ def plot_investors_net_benefit(years, net_benefit):
 # ----------------------------- #
 
 def main():
-    # Run the login check before displaying the app
+    # 1. Enforce login
     login()
 
+    # 2. Set page config
     st.set_page_config(page_title="ECi Condo Loan Calculator", layout="centered")
     st.title("🏢 ECi Condo Loan Calculator 🏦")
     st.markdown("""
@@ -170,26 +180,27 @@ def main():
         If accepted, it provides a detailed loan schedule, ECi's profit, and your net benefits from the deal.
     """)
 
-    # Fetch current BTC price from Binance
+    # 3. Fetch current BTC price
     btc_price = fetch_btc_price()
     if btc_price:
         st.sidebar.header("Current BTC Price")
         st.sidebar.metric(label="BTC Price (USD)", value=f"${btc_price:,.2f}")
 
-    # User Inputs
+    # 4. User Inputs
     st.header("🔍 Input Parameters")
     btc_amount = st.number_input("Enter the number of BTC you hold:", min_value=0.0, value=50.0, step=0.01)
     condo_price = st.number_input("Enter the price of the condo in USD:", min_value=0.0, value=1000000.0, step=1000.0)
 
-    # Calculate initial BTC value
+    # 5. Calculate initial BTC value
     V0 = btc_amount * btc_price if btc_price else 0.0
 
-    # Define constraint
+    # 6. Define constraint (Max condo cost is 25% of total BTC value)
     max_condo_cost = 0.25 * V0
 
-    # Button to evaluate
+    # 7. Button to evaluate
     if st.button("Evaluate Deal"):
-        if btc_price is None or btc_price == 0.0:
+        # Check if we have a valid BTC price
+        if not btc_price or btc_price == 0.0:
             st.error("BTC price not available. Please check your internet connection.")
             return
 
@@ -225,14 +236,17 @@ def main():
             schedule_df = pd.DataFrame(schedule)
             st.subheader("📅 Loan Schedule")
             st.plotly_chart(plot_loan_schedule(schedule_df), use_container_width=True)
-            st.dataframe(schedule_df.style.format({"Payment": "${:,.2f}", "Interest": "${:,.2f}", 
-                                                   "Principal": "${:,.2f}", "Remaining Balance": "${:,.2f}"}))
+            st.dataframe(schedule_df.style.format({
+                "Payment": "${:,.2f}", 
+                "Interest": "${:,.2f}",
+                "Principal": "${:,.2f}", 
+                "Remaining Balance": "${:,.2f}"
+            }))
             
             # Calculate ECi's Profit
             total_payments = DP + (A * loan_term_years)
             profit = total_payments - condo_price
-            profit_percentage = (profit / condo_price) * 100
-            profit_percentage = round(profit_percentage, 2)
+            profit_percentage = round((profit / condo_price) * 100, 2)
 
             # Display ECi's Profit
             st.subheader("📈 ECi's Profit")
@@ -259,10 +273,14 @@ def main():
             st.write(f"**Total Net Benefit:** ${investors_net_benefit:,.2f}")
 
         else:
-            st.error("❌ **Deal Not Accepted:** constraint.")
-            st.write(f"**Maximum Allowed Condo Cost vs BTC Holdings' Value:** ${max_condo_cost:,.2f}")
+            st.error("❌ **Deal Not Accepted:** Constraint not met.")
+            st.write(f"**Maximum Allowed Condo Cost (25% of BTC holdings' value):** ${max_condo_cost:,.2f}")
             st.write(f"**Your Condo Price:** ${condo_price:,.2f}")
             st.write("**Please adjust your condo price to meet the investment constraints and try again.**")
+
+# ----------------------------- #
+#          Main Entry            #
+# ----------------------------- #
 
 if __name__ == "__main__":
     main()
