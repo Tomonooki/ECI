@@ -10,6 +10,9 @@ import plotly.graph_objects as go
 #          LOGIN MODULE       #
 ###############################
 def login():
+    """
+    Simple login function that checks for a fixed password.
+    """
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
 
@@ -18,21 +21,20 @@ def login():
         password_input = st.text_input("Enter Password:", type="password")
         if st.button("Login"):
             if password_input == "Bitcoin99!":
-                # Just set the session state and do NOT rerun
                 st.session_state.logged_in = True
             else:
                 st.error("Incorrect password!")
         st.stop()
+
 ###############################
 #       HELPER FUNCTIONS      #
 ###############################
 
-@st.cache_data  # Use the new caching API (Streamlit >= 1.18)
+@st.cache_data  # Use Streamlit's new caching API (>= 1.18)
 def fetch_btc_price():
     """
     Fetches the current BTC price in USD. 
     First tries Binance, then falls back to yfinance if Binance fails.
-    Caches the result to limit repeated API calls.
     """
     # 1. Try Binance first
     try:
@@ -62,23 +64,14 @@ def fetch_btc_price():
     except Exception as e:
         st.error(f"Error fetching BTC price from yfinance: {e}")
 
-    # If both fail, return None
     return None
 
 def calculate_annual_payment(loan_amount, annual_rate, years):
-    """
-    Calculates the fixed annual loan payment using the annuity formula.
-    """
-    payment = loan_amount * (annual_rate * (1 + annual_rate) ** years) / (
+    return loan_amount * (annual_rate * (1 + annual_rate) ** years) / (
         (1 + annual_rate) ** years - 1
     )
-    return payment
 
 def generate_loan_schedule(loan_amount, annual_rate, annual_payment, years):
-    """
-    Generates the loan schedule showing interest, principal repayment, 
-    and remaining balance each year.
-    """
     schedule = []
     remaining_balance = loan_amount
     for year in range(1, years + 1):
@@ -95,9 +88,6 @@ def generate_loan_schedule(loan_amount, annual_rate, annual_payment, years):
     return schedule
 
 def plot_loan_schedule(schedule_df):
-    """
-    Plots the loan payment breakdown over the years using Plotly.
-    """
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=schedule_df['Year'],
@@ -122,9 +112,6 @@ def plot_loan_schedule(schedule_df):
     return fig
 
 def plot_ecis_profit(profit_percentage):
-    """
-    Plots ECi's profit as a single bar using Plotly.
-    """
     fig = go.Figure(go.Bar(
         x=['ECi Profit'],
         y=[profit_percentage],
@@ -145,9 +132,6 @@ def plot_ecis_profit(profit_percentage):
     return fig
 
 def plot_investors_net_benefit(years, net_benefit):
-    """
-    Plots the investor's net benefit over time using Plotly.
-    """
     fig = go.Figure(go.Scatter(
         x=years,
         y=net_benefit,
@@ -172,7 +156,7 @@ def main():
     # 1. Enforce login
     login()
 
-    # 2. Set page config
+    # 2. Page config
     st.set_page_config(page_title="ECi Condo Loan Calculator", layout="centered")
     st.title("🏢 ECi Condo Loan Calculator 🏦")
     st.markdown("""
@@ -181,30 +165,40 @@ def main():
         and your net benefits from the deal.
     """)
 
-    # 3. User Inputs (No BTC price fetch here)
+    # 3. Add a "Refresh BTC Price" button at the top
+    #    When clicked, fetch and store in session_state
+    if 'btc_price' not in st.session_state:
+        st.session_state['btc_price'] = None
+
+    if st.button("Refresh BTC Price"):
+        st.session_state['btc_price'] = fetch_btc_price()
+        # Optionally rerun to update UI automatically:
+        # st.experimental_rerun()  # Uncomment if needed
+
+    # 4. Display the current BTC price in the sidebar (if we have it)
+    if st.session_state['btc_price'] is not None:
+        st.sidebar.header("Current BTC Price")
+        st.sidebar.metric(label="BTC Price (USD)", value=f"${st.session_state['btc_price']:,.2f}")
+    else:
+        st.sidebar.write("BTC Price not fetched yet. Click 'Refresh BTC Price'.")
+
+    # 5. User inputs for the condo calculation
     st.header("🔍 Input Parameters")
     btc_amount = st.number_input("Enter the number of BTC you hold:", min_value=0.0, value=50.0, step=0.01)
     condo_price = st.number_input("Enter the price of the condo in USD:", min_value=0.0, value=1000000.0, step=1000.0)
 
-    # 4. Evaluate Deal Button
+    # 6. Evaluate Deal button
     if st.button("Evaluate Deal"):
-        # Fetch price ONLY when user clicks the button
-        btc_price = fetch_btc_price()
-
-        # If price is None or zero, show error and stop
+        # Check if we have a valid BTC price
+        btc_price = st.session_state['btc_price']
         if not btc_price:
-            st.error("Could not fetch BTC price. Please check your internet connection.")
+            st.error("BTC price not available. Please click 'Refresh BTC Price' first.")
             return
-        
-        # Show fetched price in the sidebar
-        st.sidebar.header("Current BTC Price")
-        st.sidebar.metric(label="BTC Price (USD)", value=f"${btc_price:,.2f}")
 
-        # Now proceed with calculations
+        # Calculate constraints
         V0 = btc_amount * btc_price
         max_condo_cost = 0.25 * V0
 
-        # Validation
         if condo_price <= max_condo_cost:
             st.success("✅ **Deal Accepted:**")
             
@@ -215,7 +209,6 @@ def main():
             loan_term_years = 4      # 4 years
             CAGR = 0.281            # 28.1% annual growth rate for BTC
 
-            # Calculate annual loan payment
             A = calculate_annual_payment(L, annual_interest_rate, loan_term_years)
             A = round(A, 2)
 
@@ -271,7 +264,6 @@ def main():
             st.write(f"**Final BTC Value (after {loan_term_years} years):** ${final_btc_value:,.2f}")
             st.write(f"**Final Condo Value (after {loan_term_years} years at 4% appreciation):** ${final_condo_value:,.2f}")
             st.write(f"**Total Net Benefit:** ${investors_net_benefit:,.2f}")
-
         else:
             st.error("❌ **Deal Not Accepted:** Condo price exceeds 25% of BTC holdings' value.")
             st.write(f"**Maximum Allowed Condo Cost (25% of BTC holdings' value):** ${max_condo_cost:,.2f}")
