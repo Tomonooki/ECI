@@ -30,7 +30,7 @@ def login():
 #       HELPER FUNCTIONS      #
 ###############################
 
-@st.cache_data(ttl=60)  # Cache result for 60 seconds
+@st.cache_data(ttl=60)  # Cache the price for 60 seconds
 def fetch_btc_price():
     """
     Fetches the current BTC price in USD.
@@ -171,11 +171,10 @@ def main():
     if 'btc_price' not in st.session_state:
         st.session_state['btc_price'] = None
 
-    # 4. "Refresh BTC Price" button
+    # 4. "Refresh BTC Price" button (no experimental_rerun)
     if st.button("Refresh BTC Price"):
         st.session_state['btc_price'] = fetch_btc_price()
-        # Force immediate UI update
-        st.experimental_rerun()
+        # No st.experimental_rerun() call here
 
     # 5. Display current BTC price in the sidebar
     if st.session_state['btc_price'] is not None:
