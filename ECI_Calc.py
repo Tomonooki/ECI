@@ -24,17 +24,19 @@ def login():
                 st.session_state.logged_in = True
             else:
                 st.error("Incorrect password!")
-        st.stop()
+        st.stop()  # Stop execution until the user logs in
 
 ###############################
 #       HELPER FUNCTIONS      #
 ###############################
 
-@st.cache_data  # Use Streamlit's new caching API (>= 1.18)
+@st.cache_data(ttl=60)  # Cache result for 60 seconds
 def fetch_btc_price():
     """
-    Fetches the current BTC price in USD. 
-    First tries Binance, then falls back to yfinance if Binance fails.
+    Fetches the current BTC price in USD.
+    1) Tries Binance first.
+    2) Falls back to yfinance if Binance fails.
+    Caches the result for 60 seconds to balance API usage vs. freshness.
     """
     # 1. Try Binance first
     try:
@@ -156,7 +158,7 @@ def main():
     # 1. Enforce login
     login()
 
-    # 2. Page config
+    # 2. Set page config
     st.set_page_config(page_title="ECi Condo Loan Calculator", layout="centered")
     st.title("🏢 ECi Condo Loan Calculator 🏦")
     st.markdown("""
@@ -165,37 +167,38 @@ def main():
         and your net benefits from the deal.
     """)
 
-    # 3. Add a "Refresh BTC Price" button at the top
-    #    When clicked, fetch and store in session_state
+    # 3. Session state for btc_price
     if 'btc_price' not in st.session_state:
         st.session_state['btc_price'] = None
 
+    # 4. "Refresh BTC Price" button
     if st.button("Refresh BTC Price"):
         st.session_state['btc_price'] = fetch_btc_price()
-        # Optionally rerun to update UI automatically:
-        # st.experimental_rerun()  # Uncomment if needed
+        # Force immediate UI update
+        st.experimental_rerun()
 
-    # 4. Display the current BTC price in the sidebar (if we have it)
+    # 5. Display current BTC price in the sidebar
     if st.session_state['btc_price'] is not None:
         st.sidebar.header("Current BTC Price")
         st.sidebar.metric(label="BTC Price (USD)", value=f"${st.session_state['btc_price']:,.2f}")
     else:
         st.sidebar.write("BTC Price not fetched yet. Click 'Refresh BTC Price'.")
 
-    # 5. User inputs for the condo calculation
+    # 6. User Inputs
     st.header("🔍 Input Parameters")
     btc_amount = st.number_input("Enter the number of BTC you hold:", min_value=0.0, value=50.0, step=0.01)
     condo_price = st.number_input("Enter the price of the condo in USD:", min_value=0.0, value=1000000.0, step=1000.0)
 
-    # 6. Evaluate Deal button
+    # 7. Evaluate Deal
     if st.button("Evaluate Deal"):
-        # Check if we have a valid BTC price
         btc_price = st.session_state['btc_price']
+
+        # Check if we have a valid BTC price
         if not btc_price:
             st.error("BTC price not available. Please click 'Refresh BTC Price' first.")
             return
 
-        # Calculate constraints
+        # Proceed with calculations
         V0 = btc_amount * btc_price
         max_condo_cost = 0.25 * V0
 
