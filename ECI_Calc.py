@@ -10,9 +10,6 @@ import plotly.graph_objects as go
 #          LOGIN MODULE       #
 ###############################
 def login():
-    """
-    Simple login function that checks for a fixed password.
-    """
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
 
@@ -21,13 +18,11 @@ def login():
         password_input = st.text_input("Enter Password:", type="password")
         if st.button("Login"):
             if password_input == "Bitcoin99!":
+                # Just set the session state and do NOT rerun
                 st.session_state.logged_in = True
-                # Force a rerun of the script to load the main app
-                st.experimental_rerun()
             else:
                 st.error("Incorrect password!")
-        st.stop()  # Stop execution until the user is logged in
-
+        st.stop()
 ###############################
 #       HELPER FUNCTIONS      #
 ###############################
